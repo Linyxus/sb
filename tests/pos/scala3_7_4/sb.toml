@@ -1,0 +1,6 @@
+[project]
+name = "scala3_7_4"
+version = "0.1.0"
+scala-version = "3.7.4"
+main-class = "app"
+dependencies = []
