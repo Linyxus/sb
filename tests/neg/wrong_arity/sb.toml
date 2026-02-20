@@ -1,0 +1,5 @@
+[project]
+name = "wrong_arity"
+version = "0.1.0"
+scala-version = "3.6.4"
+dependencies = []

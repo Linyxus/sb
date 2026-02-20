@@ -1,0 +1,6 @@
+[project]
+name = "higher_order"
+version = "0.1.0"
+scala-version = "3.6.4"
+main-class = "higherOrderMain"
+dependencies = []

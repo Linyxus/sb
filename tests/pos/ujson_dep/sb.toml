@@ -1,0 +1,8 @@
+[project]
+name = "ujson_dep"
+version = "0.1.0"
+scala-version = "3.6.4"
+main-class = "ujsonMain"
+dependencies = [
+  "com.lihaoyi::upickle:4.1.0",
+]

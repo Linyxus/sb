@@ -1,0 +1,6 @@
+[project]
+name = "sealed_exhaustive"
+version = "0.1.0"
+scala-version = "3.6.4"
+scalac_options = ["-Werror"]
+dependencies = []
