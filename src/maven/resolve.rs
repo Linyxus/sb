@@ -1,9 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{bail, Result};
-use indicatif::ProgressBar;
 
 use super::coord::MavenCoord;
 use super::fetch::MavenFetcher;
@@ -17,19 +15,12 @@ struct QueueEntry {
 
 /// Resolve transitive dependencies for a list of root Maven coordinates.
 /// Returns de-duplicated list of coordinates (compile+runtime scope only).
-/// Updates the progress bar with resolution progress if provided.
-pub fn resolve(
-    fetcher: &MavenFetcher,
-    roots: &[MavenCoord],
-    pb: Option<&ProgressBar>,
-    label: &str,
-) -> Result<Vec<MavenCoord>> {
+pub fn resolve(fetcher: &MavenFetcher, roots: &[MavenCoord]) -> Result<Vec<MavenCoord>> {
     let mut resolved: HashMap<(String, String), MavenCoord> = HashMap::new();
     let mut dep_mgmt: HashMap<(String, String), ManagedDep> = HashMap::new();
     let mut pom_cache: HashMap<MavenCoord, Pom> = HashMap::new();
     let mut queue: VecDeque<QueueEntry> = VecDeque::new();
 
-    // Seed queue with roots
     for coord in roots {
         queue.push_back(QueueEntry {
             coord: coord.clone(),
@@ -41,26 +32,15 @@ pub fn resolve(
     while let Some(entry) = queue.pop_front() {
         let key = entry.coord.key();
 
-        // Nearest-first: skip if already resolved
         if resolved.contains_key(&key) {
             continue;
         }
 
         resolved.insert(key, entry.coord.clone());
 
-        if let Some(pb) = pb {
-            pb.set_message(format!(
-                "Resolving {label} ({} artifact{})",
-                resolved.len(),
-                if resolved.len() == 1 { "" } else { "s" }
-            ));
-        }
-
-        // Fetch effective POM
         let effective = match pom::resolve_effective_pom(fetcher, &entry.coord, &mut pom_cache) {
             Ok(p) => p,
             Err(e) => {
-                // For transitive deps, warn and skip on POM errors
                 if entry.depth > 0 {
                     eprintln!("warning: failed to resolve POM for {}: {e}", entry.coord);
                     continue;
@@ -69,9 +49,7 @@ pub fn resolve(
             }
         };
 
-        // Collect dependencyManagement from root POMs and all effective POMs
         for md in &effective.dependency_management {
-            // Handle BOM imports
             if md.dep_type == "pom" && md.scope.as_deref() == Some("import") {
                 let bom_coord = MavenCoord::new(&md.group_id, &md.artifact_id, &md.version);
                 if let Ok(bom_pom) = pom::resolve_effective_pom(fetcher, &bom_coord, &mut pom_cache) {
@@ -86,7 +64,6 @@ pub fn resolve(
             }
         }
 
-        // Process dependencies
         for dep in &effective.dependencies {
             let scope = dep.scope.as_str();
             if scope == "test" || scope == "provided" || scope == "system" {
@@ -153,29 +130,13 @@ pub fn resolve(
 }
 
 /// Resolve dependencies and download all JARs in parallel. Returns classpath string.
-/// Updates the progress bar through resolve and download phases.
-pub fn resolve_and_fetch(
-    fetcher: &MavenFetcher,
-    roots: &[MavenCoord],
-    pb: Option<&ProgressBar>,
-    label: &str,
-) -> Result<String> {
-    let coords = resolve(fetcher, roots, pb, label)?;
-    let total = coords.len() as u64;
+pub fn resolve_and_fetch(fetcher: &MavenFetcher, roots: &[MavenCoord]) -> Result<String> {
+    let coords = resolve(fetcher, roots)?;
 
-    // Download phase
-    let downloaded = AtomicU64::new(0);
-
+    // Download JARs in parallel — each thread adds its own progress bar via fetcher
     let jar_paths: Vec<Result<PathBuf>> = std::thread::scope(|s| {
         let handles: Vec<_> = coords.iter().map(|c| {
-            s.spawn(|| {
-                let result = fetcher.fetch_jar(c);
-                let n = downloaded.fetch_add(1, Ordering::Relaxed) + 1;
-                if let Some(pb) = pb {
-                    pb.set_message(format!("Downloading {label} [{n}/{total}]"));
-                }
-                result
-            })
+            s.spawn(|| fetcher.fetch_jar(c))
         }).collect();
         handles.into_iter().map(|h| h.join().expect("JAR download panicked")).collect()
     });
