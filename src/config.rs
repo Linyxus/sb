@@ -28,7 +28,18 @@ impl SbConfig {
             .with_context(|| format!("failed to read {}", path.display()))?;
         let config: SbConfig =
             toml::from_str(&content).with_context(|| format!("failed to parse {}", path.display()))?;
+        config.validate()?;
         Ok(config)
+    }
+
+    fn validate(&self) -> Result<()> {
+        let sv = &self.project.scala_version;
+        if !sv.starts_with("3.") {
+            anyhow::bail!(
+                "unsupported Scala version '{sv}': only Scala 3.x is supported"
+            );
+        }
+        Ok(())
     }
 
     pub fn source_dir(project_root: &Path) -> PathBuf {

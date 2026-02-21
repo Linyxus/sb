@@ -24,8 +24,17 @@ enum Commands {
         /// Project name, or "." to init in current directory
         name: String,
     },
+    /// Initialize a new Scala 3 project (alias for init)
+    #[command(hide = true)]
+    New {
+        /// Project name, or "." to init in current directory
+        name: String,
+    },
     /// Compile the project
     Build,
+    /// Compile the project (alias for build)
+    #[command(hide = true)]
+    Compile,
     /// Compile and run the main class
     Run {
         /// Arguments to pass to the program
@@ -42,8 +51,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { name } => cmd_init(name),
-        Commands::Build => cmd_build(),
+        Commands::Init { name } | Commands::New { name } => cmd_init(name),
+        Commands::Build | Commands::Compile => cmd_build(),
         Commands::Run { args } => cmd_run(&args),
         Commands::Asm => cmd_asm(),
         Commands::Clean => cmd_clean(),

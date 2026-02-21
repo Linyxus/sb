@@ -189,3 +189,16 @@ fn neg_projects_fail() {
         );
     }
 }
+
+#[test]
+fn scala2_rejected() {
+    let _guard = TEST_LOCK.lock().unwrap();
+    let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/neg/scala2");
+    let output = run_sb(&project, &["build"]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("only Scala 3.x is supported"),
+        "expected Scala 3 error message, got: {stderr}",
+    );
+}
