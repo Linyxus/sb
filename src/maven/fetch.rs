@@ -16,7 +16,7 @@ fn spinner_style() -> ProgressStyle {
 }
 
 fn bar_style() -> ProgressStyle {
-    ProgressStyle::with_template("  {msg} [{bar:20.cyan/dim}] {bytes}/{total_bytes}")
+    ProgressStyle::with_template("  {wide_msg} [{bar:20.cyan/dim}] {bytes}/{total_bytes}")
         .unwrap()
         .progress_chars("=>.")
 }
