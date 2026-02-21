@@ -1,0 +1,6 @@
+[project]
+name = "explicit_nulls"
+version = "0.1.0"
+scala-version = "3.6.4"
+dependencies = []
+scalac_options = ["-Yexplicit-nulls"]
