@@ -97,6 +97,23 @@ fn pos_projects_run() {
 }
 
 #[test]
+fn run_with_cli_args() {
+    let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/cli_args");
+    let output = run_sb(&project, &["run", "--", "hello", "world", "foo"]);
+    assert!(
+        output.status.success(),
+        "sb run with args failed\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("hello\nworld\nfoo"),
+        "expected CLI args in output, got: {stdout}",
+    );
+}
+
+#[test]
 fn neg_projects_fail() {
     let neg_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/neg");
     let projects = discover_projects(&neg_dir);
