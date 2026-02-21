@@ -15,6 +15,12 @@ fn spinner_style() -> ProgressStyle {
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ")
 }
 
+fn bar_style() -> ProgressStyle {
+    ProgressStyle::with_template("  {msg} [{bar:20.cyan/dim}] {bytes}/{total_bytes}")
+        .unwrap()
+        .progress_chars("=>.")
+}
+
 fn finish_style() -> ProgressStyle {
     ProgressStyle::with_template("  {msg}").unwrap()
 }
@@ -107,8 +113,10 @@ impl MavenFetcher {
         let pb = self.tracker.add_spinner(&label);
 
         let url = coord.pom_url();
-        let body = self.http_get_string(&url)
+        let bytes = self.http_get_with_progress(&url, &pb)
             .with_context(|| format!("failed to fetch POM for {coord}"))?;
+        let body = String::from_utf8(bytes)
+            .with_context(|| format!("POM for {coord} is not valid UTF-8"))?;
 
         if let Some(parent) = local.parent() {
             fs::create_dir_all(parent)?;
@@ -133,7 +141,7 @@ impl MavenFetcher {
         let pb = self.tracker.add_spinner(&label);
 
         let url = coord.jar_url();
-        let bytes = self.http_get_bytes(&url)
+        let bytes = self.http_get_with_progress(&url, &pb)
             .with_context(|| format!("failed to fetch JAR for {coord}"))?;
 
         if let Some(parent) = local.parent() {
@@ -145,27 +153,36 @@ impl MavenFetcher {
         Ok(local)
     }
 
-    fn http_get_string(&self, url: &str) -> Result<String> {
+    fn http_get_with_progress(&self, url: &str, pb: &ProgressBar) -> Result<Vec<u8>> {
         let response = self.agent.get(url).call()
             .map_err(|e| anyhow::anyhow!("HTTP GET {url} failed: {e}"))?;
         let status = response.status();
         if status != 200 {
             bail!("HTTP {status} for {url}");
         }
-        let mut body = String::new();
-        response.into_body().as_reader().read_to_string(&mut body)?;
-        Ok(body)
-    }
 
-    fn http_get_bytes(&self, url: &str) -> Result<Vec<u8>> {
-        let response = self.agent.get(url).call()
-            .map_err(|e| anyhow::anyhow!("HTTP GET {url} failed: {e}"))?;
-        let status = response.status();
-        if status != 200 {
-            bail!("HTTP {status} for {url}");
+        let content_len = response.headers().get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<u64>().ok());
+
+        if let Some(len) = content_len {
+            pb.set_style(bar_style());
+            pb.set_length(len);
         }
+
         let mut body = Vec::new();
-        response.into_body().as_reader().read_to_end(&mut body)?;
+        let mut resp_body = response.into_body();
+        let mut reader = resp_body.as_reader();
+        let mut buf = [0u8; 8192];
+        loop {
+            let n = reader.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            body.extend_from_slice(&buf[..n]);
+            pb.set_position(body.len() as u64);
+        }
+
         Ok(body)
     }
 }
