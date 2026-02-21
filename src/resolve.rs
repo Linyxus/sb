@@ -2,6 +2,8 @@ use anyhow::Result;
 use indicatif::MultiProgress;
 use std::path::Path;
 
+use crate::maven::fetch::ProgressTracker;
+
 use crate::cache;
 use crate::config::SbConfig;
 use crate::maven;
@@ -56,11 +58,12 @@ pub fn resolve_classpath(config: &SbConfig, project_root: &Path) -> Result<Resol
     }
 
     let mp = MultiProgress::new();
+    let tracker = ProgressTracker::new(mp);
 
     // Resolve both in parallel — per-artifact progress bars appear dynamically
     let (compiler_result, user_result) = std::thread::scope(|s| {
-        let h1 = s.spawn(|| maven::resolve_classpath(&compiler_deps, &mp));
-        let h2 = s.spawn(|| maven::resolve_classpath(&user_deps, &mp));
+        let h1 = s.spawn(|| maven::resolve_classpath(&compiler_deps, &tracker));
+        let h2 = s.spawn(|| maven::resolve_classpath(&user_deps, &tracker));
         (
             h1.join().expect("compiler resolve panicked"),
             h2.join().expect("user resolve panicked"),

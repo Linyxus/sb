@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
@@ -18,14 +19,68 @@ fn finish_style() -> ProgressStyle {
     ProgressStyle::with_template("  {msg}").unwrap()
 }
 
+struct TrackerState {
+    completed: Vec<ProgressBar>,
+    folded_count: u64,
+}
+
+/// Manages a rolling window of completed progress bars, folding older ones
+/// into a summary line like "✓ N artifacts fetched".
+pub struct ProgressTracker {
+    mp: MultiProgress,
+    summary_bar: ProgressBar,
+    state: Mutex<TrackerState>,
+}
+
+const MAX_VISIBLE_COMPLETED: usize = 3;
+
+impl ProgressTracker {
+    pub fn new(mp: MultiProgress) -> Arc<Self> {
+        let summary_bar = mp.add(ProgressBar::new_spinner());
+        summary_bar.set_style(finish_style());
+        summary_bar.finish_with_message(String::new());
+        Arc::new(Self {
+            mp,
+            summary_bar,
+            state: Mutex::new(TrackerState {
+                completed: Vec::new(),
+                folded_count: 0,
+            }),
+        })
+    }
+
+    pub fn add_spinner(&self, label: &str) -> ProgressBar {
+        let pb = self.mp.add(ProgressBar::new_spinner());
+        pb.set_style(spinner_style());
+        pb.set_message(label.to_string());
+        pb.enable_steady_tick(Duration::from_millis(80));
+        pb
+    }
+
+    pub fn mark_done(&self, pb: &ProgressBar, label: &str) {
+        let mut st = self.state.lock().unwrap();
+
+        if st.completed.len() == MAX_VISIBLE_COMPLETED {
+            let oldest = st.completed.remove(0);
+            oldest.finish_and_clear();
+            st.folded_count += 1;
+            self.summary_bar.set_message(format!("✓ {} artifacts fetched", st.folded_count));
+        }
+
+        pb.set_style(finish_style());
+        pb.finish_with_message(format!("✓ {label}"));
+        st.completed.push(pb.clone());
+    }
+}
+
 pub struct MavenFetcher {
     cache_root: PathBuf,
     agent: ureq::Agent,
-    mp: MultiProgress,
+    tracker: Arc<ProgressTracker>,
 }
 
 impl MavenFetcher {
-    pub fn new(mp: MultiProgress) -> Result<Self> {
+    pub fn new(tracker: Arc<ProgressTracker>) -> Result<Self> {
         let cache_root = dirs::cache_dir()
             .context("could not determine cache directory")?
             .join("sb")
@@ -33,7 +88,7 @@ impl MavenFetcher {
         Ok(Self {
             cache_root,
             agent: ureq::Agent::new_with_defaults(),
-            mp,
+            tracker,
         })
     }
 
@@ -43,19 +98,13 @@ impl MavenFetcher {
         let local = coord.local_pom_path(&self.cache_root);
 
         if local.exists() {
-            // Cached: show completed immediately
-            let pb = self.mp.add(ProgressBar::new_spinner());
-            pb.set_style(finish_style());
-            pb.finish_with_message(format!("✓ {label}"));
+            let pb = self.tracker.add_spinner(&label);
+            self.tracker.mark_done(&pb, &label);
             return fs::read_to_string(&local)
                 .with_context(|| format!("failed to read cached POM: {}", local.display()));
         }
 
-        // Downloading: show spinner
-        let pb = self.mp.add(ProgressBar::new_spinner());
-        pb.set_style(spinner_style());
-        pb.set_message(label.clone());
-        pb.enable_steady_tick(Duration::from_millis(80));
+        let pb = self.tracker.add_spinner(&label);
 
         let url = coord.pom_url();
         let body = self.http_get_string(&url)
@@ -66,8 +115,7 @@ impl MavenFetcher {
         }
         fs::write(&local, &body)?;
 
-        pb.set_style(finish_style());
-        pb.finish_with_message(format!("✓ {label}"));
+        self.tracker.mark_done(&pb, &label);
         Ok(body)
     }
 
@@ -77,16 +125,12 @@ impl MavenFetcher {
         let local = coord.local_jar_path(&self.cache_root);
 
         if local.exists() {
-            let pb = self.mp.add(ProgressBar::new_spinner());
-            pb.set_style(finish_style());
-            pb.finish_with_message(format!("✓ {label}"));
+            let pb = self.tracker.add_spinner(&label);
+            self.tracker.mark_done(&pb, &label);
             return Ok(local);
         }
 
-        let pb = self.mp.add(ProgressBar::new_spinner());
-        pb.set_style(spinner_style());
-        pb.set_message(label.clone());
-        pb.enable_steady_tick(Duration::from_millis(80));
+        let pb = self.tracker.add_spinner(&label);
 
         let url = coord.jar_url();
         let bytes = self.http_get_bytes(&url)
@@ -97,8 +141,7 @@ impl MavenFetcher {
         }
         fs::write(&local, &bytes)?;
 
-        pb.set_style(finish_style());
-        pb.finish_with_message(format!("✓ {label}"));
+        self.tracker.mark_done(&pb, &label);
         Ok(local)
     }
 
