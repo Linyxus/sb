@@ -1,11 +1,11 @@
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
 
 use crate::cache;
 use crate::config::SbConfig;
+use crate::maven;
 
 #[derive(Debug, Clone)]
 pub struct ResolvedClasspath {
@@ -85,8 +85,8 @@ pub fn resolve_classpath(config: &SbConfig, project_root: &Path) -> Result<Resol
 
     // Resolve both in parallel
     let (compiler_result, user_result) = std::thread::scope(|s| {
-        let h1 = s.spawn(|| cs_fetch(&compiler_deps));
-        let h2 = s.spawn(|| cs_fetch(&user_deps));
+        let h1 = s.spawn(|| maven::resolve_classpath(&compiler_deps));
+        let h2 = s.spawn(|| maven::resolve_classpath(&user_deps));
         (
             h1.join().expect("compiler resolve panicked"),
             h2.join().expect("user resolve panicked"),
@@ -110,7 +110,7 @@ pub fn resolve_classpath(config: &SbConfig, project_root: &Path) -> Result<Resol
     Ok(resolved)
 }
 
-/// Convert a user dependency string to a full coursier coordinate.
+/// Convert a user dependency string to a full Maven coordinate.
 /// Handles `::` (Scala cross-version) by replacing with `_3:`.
 fn resolve_dep_coord(dep: &str, _scala_version: &str) -> String {
     // org::name:version -> org:name_3:version
@@ -120,22 +120,4 @@ fn resolve_dep_coord(dep: &str, _scala_version: &str) -> String {
         }
     }
     dep.to_string()
-}
-
-fn cs_fetch(deps: &[String]) -> Result<String> {
-    let mut cmd = Command::new("cs");
-    cmd.arg("fetch").arg("--classpath");
-    for dep in deps {
-        cmd.arg(dep);
-    }
-    let output = cmd.output().context("failed to run `cs` (coursier). Is it installed?")?;
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("coursier fetch failed:\n{stderr}");
-    }
-    let cp = String::from_utf8(output.stdout)
-        .context("invalid UTF-8 from coursier")?
-        .trim()
-        .to_string();
-    Ok(cp)
 }

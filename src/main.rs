@@ -1,6 +1,7 @@
 mod cache;
 mod compile;
 mod config;
+mod maven;
 mod resolve;
 mod run;
 
