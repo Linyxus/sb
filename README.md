@@ -2,8 +2,6 @@
 
 Ultra-fast, minimalist build tool for Scala 3.
 
-No console. No XML. No waiting. Just build.
-
 ## Install
 
 ```sh
@@ -60,14 +58,41 @@ myapp/
             └── Main.scala
 ```
 
-## Performance
+## `sb.toml` Reference
 
-sb is designed to be fast:
+The project configuration file has a single `[project]` table with the following fields:
 
-- **Native binary** — no JVM startup for the tool itself
-- **Cached dependency resolution** — Coursier only runs when dependencies change
-- **Source fingerprinting** — no-op builds complete in ~4ms
-- **Parallel I/O** — dependency resolution and source hashing run concurrently
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | yes | Project name |
+| `version` | string | yes | Project version |
+| `scala-version` | string | yes | Scala 3 compiler version (e.g. `"3.6.4"`) |
+| `main-class` | string | no | Name of the `@main` method to run with `sb run` |
+| `dependencies` | array of strings | no | Library dependencies (default: `[]`) |
+| `scalac_options` | array of strings | no | Extra flags passed to the Scala compiler (default: `[]`) |
+
+### Dependency syntax
+
+Dependencies are specified as Maven coordinates with a colon-separated format:
+
+- **Scala dependency** (`::`) — `"org::artifact:version"` is expanded to `org:artifact_3:version`, appending the `_3` cross-version suffix automatically.
+- **Java dependency** (`:`) — `"org:artifact:version"` is used as-is, with no cross-version rewriting.
+
+### Full example
+
+```toml
+[project]
+name = "myapp"
+version = "0.1.0"
+scala-version = "3.6.4"
+main-class = "hello"
+dependencies = [
+  "org.typelevel::cats-core:2.12.0",
+  "com.lihaoyi::os-lib:0.11.4",
+  "com.google.guava:guava:33.0.0-jre",
+]
+scalac_options = ["-Werror", "-explain"]
+```
 
 ## License
 
