@@ -147,7 +147,7 @@ fn asm_produces_runnable_jar() {
     );
 
     // Run the assembled JAR
-    let jar_path = work_dir.join(".sb/cli_args-assembly.jar");
+    let jar_path = work_dir.join(".sb/cli_args-0.1.0-assembly.jar");
     assert!(jar_path.exists(), "assembly jar not found at {}", jar_path.display());
 
     let run_output = Command::new("java")

@@ -50,7 +50,4 @@ impl SbConfig {
         project_root.join(".sb/classes")
     }
 
-    pub fn cache_dir(project_root: &Path) -> PathBuf {
-        project_root.join(".sb/cache")
-    }
 }

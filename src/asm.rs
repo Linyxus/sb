@@ -20,7 +20,7 @@ pub fn assemble(config: &SbConfig, project_root: &Path) -> Result<PathBuf> {
 
     let output_path = project_root
         .join(".sb")
-        .join(format!("{}-assembly.jar", config.project.name));
+        .join(format!("{}-{}-assembly.jar", config.project.name, config.project.version));
 
     let file = std::fs::File::create(&output_path)?;
     let mut zip = ZipWriter::new(file);

@@ -8,7 +8,6 @@ use crate::resolve::{self, ResolvedClasspath};
 
 pub struct CompileResult {
     pub resolved: ResolvedClasspath,
-    pub up_to_date: bool,
 }
 
 pub fn compile(config: &SbConfig, project_root: &Path) -> Result<CompileResult> {
@@ -43,7 +42,7 @@ pub fn compile(config: &SbConfig, project_root: &Path) -> Result<CompileResult> 
         && std::fs::read_dir(&classes_dir)?.next().is_some()
     {
         eprintln!("Nothing to compile.");
-        return Ok(CompileResult { resolved, up_to_date: true });
+        return Ok(CompileResult { resolved });
     }
 
     // Clean classes dir for fresh compile
@@ -78,5 +77,5 @@ pub fn compile(config: &SbConfig, project_root: &Path) -> Result<CompileResult> 
 
     cache::write_cache(project_root, "src-hash", &src_hash_str)?;
 
-    Ok(CompileResult { resolved, up_to_date: false })
+    Ok(CompileResult { resolved })
 }
