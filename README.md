@@ -25,6 +25,7 @@ sb run
 | `sb init <name>` | Create a new project (use `.` for current directory) |
 | `sb build` | Compile the project |
 | `sb run [args...]` | Compile and run |
+| `sb asm` | Assemble a fat JAR |
 | `sb clean` | Remove build artifacts |
 
 ## Configuration

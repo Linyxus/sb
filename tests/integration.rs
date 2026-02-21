@@ -1,5 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::LazyLock;
+use std::sync::Mutex;
+
+/// Integration tests must run sequentially because they share a global Maven/JAR cache.
+/// Parallel resolution of the same artifacts can cause corruption.
+static TEST_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn sb_binary() -> PathBuf {
     // cargo sets this env var when running tests
@@ -60,6 +66,7 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 
 #[test]
 fn pos_projects_build() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let pos_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos");
     let projects = discover_projects(&pos_dir);
     assert!(!projects.is_empty(), "no positive test projects found in tests/pos/");
@@ -80,6 +87,7 @@ fn pos_projects_build() {
 
 #[test]
 fn pos_projects_run() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let pos_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos");
     let projects = discover_projects(&pos_dir);
 
@@ -106,6 +114,7 @@ fn pos_projects_run() {
 
 #[test]
 fn run_with_cli_args() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/cli_args");
     let output = run_sb(&project, &["run", "--", "hello", "world", "foo"]);
     assert!(
@@ -123,6 +132,7 @@ fn run_with_cli_args() {
 
 #[test]
 fn asm_produces_runnable_jar() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/cli_args");
     let tmp = tempfile::tempdir().unwrap();
     let work_dir = tmp.path().join("cli_args");
@@ -159,6 +169,7 @@ fn asm_produces_runnable_jar() {
 
 #[test]
 fn neg_projects_fail() {
+    let _guard = TEST_LOCK.lock().unwrap();
     let neg_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/neg");
     let projects = discover_projects(&neg_dir);
 
