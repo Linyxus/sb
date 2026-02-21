@@ -8,7 +8,7 @@ Ultra-fast, minimalist build tool for Scala 3.
 cargo install --path .
 ```
 
-Requires `java` and [`cs` (Coursier)](https://get-coursier.io/docs/cli-installation) on your PATH.
+Requires an installation of `java`.
 
 ## Quickstart
 
