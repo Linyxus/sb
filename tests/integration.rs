@@ -66,7 +66,7 @@ fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
 
 #[test]
 fn pos_projects_build() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let pos_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos");
     let projects = discover_projects(&pos_dir);
     assert!(!projects.is_empty(), "no positive test projects found in tests/pos/");
@@ -87,7 +87,7 @@ fn pos_projects_build() {
 
 #[test]
 fn pos_projects_run() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let pos_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos");
     let projects = discover_projects(&pos_dir);
 
@@ -114,7 +114,7 @@ fn pos_projects_run() {
 
 #[test]
 fn run_with_cli_args() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/cli_args");
     let output = run_sb(&project, &["run", "--", "hello", "world", "foo"]);
     assert!(
@@ -132,7 +132,7 @@ fn run_with_cli_args() {
 
 #[test]
 fn asm_produces_runnable_jar() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/cli_args");
     let tmp = tempfile::tempdir().unwrap();
     let work_dir = tmp.path().join("cli_args");
@@ -169,7 +169,7 @@ fn asm_produces_runnable_jar() {
 
 #[test]
 fn neg_projects_fail() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let neg_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/neg");
     let projects = discover_projects(&neg_dir);
 
@@ -191,8 +191,55 @@ fn neg_projects_fail() {
 }
 
 #[test]
+fn tasty_roundtrip() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/firstproj");
+    let tmp = tempfile::tempdir().unwrap();
+    let work_dir = tmp.path().join("firstproj");
+    copy_dir_all(&project, &work_dir).unwrap();
+
+    // Build first
+    let output = run_sb_in(&work_dir, &["build"]);
+    assert!(
+        output.status.success(),
+        "sb build failed\nstderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    // Find .tasty files
+    let classes_dir = work_dir.join(".sb/classes");
+    let tasty_files: Vec<PathBuf> = walkdir::WalkDir::new(&classes_dir)
+        .into_iter()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "tasty"))
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    assert!(!tasty_files.is_empty(), "no .tasty files found after build");
+
+    // Run sb tasty on each .tasty file
+    for tasty_file in &tasty_files {
+        let output = run_sb_in(&work_dir, &["tasty", tasty_file.to_str().unwrap()]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success(),
+            "sb tasty failed for {}\nstdout: {}\nstderr: {}",
+            tasty_file.display(),
+            stdout,
+            stderr,
+        );
+        assert!(
+            stdout.contains("TASTy"),
+            "expected 'TASTy' in output for {}, got: {}",
+            tasty_file.display(),
+            stdout,
+        );
+    }
+}
+
+#[test]
 fn scala2_rejected() {
-    let _guard = TEST_LOCK.lock().unwrap();
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/neg/scala2");
     let output = run_sb(&project, &["build"]);
     assert!(!output.status.success());

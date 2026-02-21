@@ -5,6 +5,7 @@ mod config;
 mod maven;
 mod resolve;
 mod run;
+mod tasty;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -43,6 +44,11 @@ enum Commands {
     },
     /// Assemble a fat JAR
     Asm,
+    /// Dump parsed TASTy file contents
+    Tasty {
+        /// Path to .tasty file
+        file: PathBuf,
+    },
     /// Remove build artifacts
     Clean,
 }
@@ -55,6 +61,7 @@ fn main() -> Result<()> {
         Commands::Build | Commands::Compile => cmd_build(),
         Commands::Run { args } => cmd_run(&args),
         Commands::Asm => cmd_asm(),
+        Commands::Tasty { file } => tasty::dump_tasty(&file),
         Commands::Clean => cmd_clean(),
     }
 }
