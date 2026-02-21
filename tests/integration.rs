@@ -35,6 +35,14 @@ fn run_sb(project_dir: &Path, args: &[&str]) -> std::process::Output {
         .expect("failed to run sb")
 }
 
+fn run_sb_in(work_dir: &Path, args: &[&str]) -> std::process::Output {
+    Command::new(sb_binary())
+        .args(args)
+        .current_dir(work_dir)
+        .output()
+        .expect("failed to run sb")
+}
+
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(dst)?;
     for entry in std::fs::read_dir(src)? {
@@ -107,6 +115,42 @@ fn run_with_cli_args() {
         String::from_utf8_lossy(&output.stderr),
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("hello\nworld\nfoo"),
+        "expected CLI args in output, got: {stdout}",
+    );
+}
+
+#[test]
+fn asm_produces_runnable_jar() {
+    let project = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/pos/cli_args");
+    let tmp = tempfile::tempdir().unwrap();
+    let work_dir = tmp.path().join("cli_args");
+    copy_dir_all(&project, &work_dir).unwrap();
+
+    let output = run_sb_in(&work_dir, &["asm"]);
+    assert!(
+        output.status.success(),
+        "sb asm failed\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+
+    // Run the assembled JAR
+    let jar_path = work_dir.join(".sb/cli_args-assembly.jar");
+    assert!(jar_path.exists(), "assembly jar not found at {}", jar_path.display());
+
+    let run_output = Command::new("java")
+        .args(["-jar", jar_path.to_str().unwrap(), "hello", "world", "foo"])
+        .output()
+        .expect("failed to run java");
+    assert!(
+        run_output.status.success(),
+        "java -jar failed\nstdout: {}\nstderr: {}",
+        String::from_utf8_lossy(&run_output.stdout),
+        String::from_utf8_lossy(&run_output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&run_output.stdout);
     assert!(
         stdout.contains("hello\nworld\nfoo"),
         "expected CLI args in output, got: {stdout}",

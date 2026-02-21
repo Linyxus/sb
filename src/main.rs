@@ -1,3 +1,4 @@
+mod asm;
 mod cache;
 mod compile;
 mod config;
@@ -31,6 +32,8 @@ enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         args: Vec<String>,
     },
+    /// Assemble a fat JAR
+    Asm,
     /// Remove build artifacts
     Clean,
 }
@@ -42,6 +45,7 @@ fn main() -> Result<()> {
         Commands::Init { name } => cmd_init(name),
         Commands::Build => cmd_build(),
         Commands::Run { args } => cmd_run(&args),
+        Commands::Asm => cmd_asm(),
         Commands::Clean => cmd_clean(),
     }
 }
@@ -106,6 +110,14 @@ fn cmd_run(args: &[String]) -> Result<()> {
     let root = project_root()?;
     let config = config::SbConfig::load(&root)?;
     run::run(&config, &root, args)
+}
+
+fn cmd_asm() -> Result<()> {
+    let root = project_root()?;
+    let config = config::SbConfig::load(&root)?;
+    let jar = asm::assemble(&config, &root)?;
+    eprintln!("Assembly: {}", jar.display());
+    Ok(())
 }
 
 fn cmd_clean() -> Result<()> {
