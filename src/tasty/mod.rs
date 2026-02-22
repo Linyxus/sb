@@ -1,4 +1,5 @@
 pub mod attributes;
+pub mod deps;
 #[allow(non_upper_case_globals)]
 pub mod format;
 pub mod names;

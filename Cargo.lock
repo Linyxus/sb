@@ -842,6 +842,7 @@ dependencies = [
  "indicatif",
  "roxmltree",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "ureq",
